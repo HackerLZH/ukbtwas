@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <property name="FILE_LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss} %highlight(%-5level) [%thread] %cyan(%logger{36}) - %msg%n"/>
+
+    <!-- 日志存到文件 -->
+    <appender name="FILE" class="ch.qos.logback.core.FileAppender">
+        <file>output/app.log</file>
+        <!--  每次启动覆盖原有日志，不追加  -->
+        <append>false</append>
+        <encoder>
+            <pattern>${FILE_LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+ 
+    <root level="debug">
+        <appender-ref ref="FILE"/>
+    </root>
+</configuration>

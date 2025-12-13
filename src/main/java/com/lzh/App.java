@@ -6,7 +6,7 @@ package com.lzh;
  */
 public class App 
 {
-    private final static String GITHUB = "github";
+    private final static String GITHUB = "https://github.com/HackerLZH/ukbtwas";
     public static void main( String[] args )
     {
         if (args.length == 0) {
@@ -21,8 +21,7 @@ public class App
                     "Warning: you must use jdk8 and over!\n", GITHUB);
         } else {
             UKB ukb = new UKB(args);
-//            System.out.println(ukb.getGeneList());
-//            System.out.println(ukb.getTraitList());
+            ukb.run();
         }
     }
 }

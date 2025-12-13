@@ -1,22 +1,22 @@
 package com.lzh;
 
 import cn.hutool.core.io.file.FileNameUtil;
+import com.lzh.util.LogUtil;
+import org.slf4j.Logger;
 
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.*;
+import java.util.stream.Collectors;
 
 public class UKB {
     
     private final List<Gene> geneList = new ArrayList<>();
     private final List<Trait> traitList = new ArrayList<>();
     private final List<String> fieldList = new ArrayList<>();
+    private final Set<String> eurSet = new HashSet<>();
+    private final static Logger log = LogUtil.getLogger(UKB.class);
 
     // 线程池
 //    private ExecutorService pool;
@@ -27,8 +27,18 @@ public class UKB {
     private boolean twas;
     // 是否考虑性别
     private boolean sex;
-    // dataId对应性状表
+    // dataId对应表格
     private static final String PARTICIPANT = "/gpfs/chencao/Temporary_Files/ukbb_features/participant2.csv";
+    // ICD10对应表格
+    private static final String ICD10 = "/gpfs/chencao/Temporary_Files/ukbb_features/diseases/ICD10/diago.csv";
+    // self-report目录
+    private static final String SELFREPORT = "/gpfs/chencao/Temporary_Files/ukbb_features/diseases/selfreport";
+    // eur id
+    private static final String EUR = "/gpfs/chencao/Temporary_Files/ukbb_features/eur.eid";
+    // eur male id for plink --extract
+    private static final String EUR_MALE = "/gpfs/chencao/Temporary_Files/ukbb_features/eur_male.eid";
+    // eur female id for plink --extract
+    private static final String EUR_FEMALE = "/gpfs/chencao/Temporary_Files/ukbb_features/eur_female.eid";
     // 将当前工作目录+output作为输出目录
     private static final String OUTPUT = System.getProperty("user.dir") + "/output";
 
@@ -42,6 +52,9 @@ public class UKB {
             magma = pascal = fusion = iso = tf = utmost = spred = smr = false;
             twas = false;
             sex = false;
+
+            // 读取UKB dataID列表
+            readFields();
 
             // 处理传入参数
             for (int i = 0; i < args.length;) {
@@ -105,32 +118,33 @@ public class UKB {
                         twas = true;
                         break;
                     default:
-                        System.out.println("invalid option with " + args[i]);
+                        log.error("invalid option with " + args[i]);
                         System.exit(0);
                 }
             }
 
             if (!geneOk) {
-                System.out.println("check your --genes");
+                log.warn("check your --genes");
                 System.exit(0);
             }
             // --trait和--plink至少得有一个
             if (!traitOk && !plinkOk) {
-                System.out.println("check your --trait or --plink");
+                log.warn("check your --trait or --plink");
                 System.exit(0);
             }
 
-            // 读取UKB dataID列表
-            readFields();
+            // eurSet
+            try (BufferedReader br = Files.newBufferedReader(Paths.get(EUR))) {
+                eurSet.addAll(br.lines().collect(Collectors.toSet()));
+            } catch (Exception e) {
+                log.error(getStackTrace(e));
+                System.exit(0);
+            }
             // 固定线程池（任务不会很多，不用担心OOM）
 //            pool = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() + 1);
-
-//            File output = new File(OUTPUT);
-//            if (!output.exists()) {
-//                output.mkdirs();
-//            }
         } catch (AssertionError e) {
-            System.out.println("No params after --genes/--traits/--plink");
+            log.error("No params after --genes/--traits/--plink");
+            log.error(getStackTrace(e));
             System.exit(0);
         }
     }
@@ -138,12 +152,9 @@ public class UKB {
     private void readFields() {
         InputStream in = getClass().getResourceAsStream("/field_order.txt");
         try (BufferedReader br = new BufferedReader(new InputStreamReader(in))) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                fieldList.add(line);
-            }
+            br.lines().forEach(fieldList::add);
         } catch (IOException e) {
-            System.out.println(e.getMessage());
+            log.error(getStackTrace(e));
         }
     }
 
@@ -154,10 +165,9 @@ public class UKB {
 
     private boolean readTraits(String arg) {
         for (String path : arg.split(",")) {
-            Trait trait = new Trait();
-            try (BufferedReader br = new BufferedReader(new InputStreamReader(Files.newInputStream(Paths.get(path))))) {
-                String line;
-                while ((line = br.readLine()) != null) {
+            try (BufferedReader br = Files.newBufferedReader(Paths.get(path))) {
+                Trait trait = new Trait();
+                br.lines().forEach(line -> {
                     String[] arr = line.trim().split(":");
                     switch (arr[0]) {
                         case "type":
@@ -167,29 +177,40 @@ public class UKB {
                             trait.setThreshold(arr[1]);
                             break;
                         case "dataId":
-                            trait.setDataId(arr[1].split(","));
+                            // 找到dataId索引
+                            List<Integer> dataIdIndexes = new ArrayList<>();
+                            for (String id : arr[1].trim().split(",")) {
+                                for (int i = 0; i < fieldList.size(); ++i) {
+                                    if (fieldList.get(i).startsWith("p" + id)) {
+                                        dataIdIndexes.add(i);
+                                        break;
+                                    }
+                                }
+                            }
+                            trait.setDataIdIndexes(dataIdIndexes);
                             break;
                         case "ICD10":
-                            trait.setICD10(arr[1].split(","));
+                            trait.setICD10(arr[1].trim().split(","));
                             break;
                         case "self-report":
-                            trait.setSelfReport(arr[1].split(","));
+                            trait.setSelfReport(arr[1].trim().split(","));
                             break;
                         default:
                             break;
                     }
-                }
+                });
                 // 根据文件名，设置性状名
                 trait.setName(FileNameUtil.mainName(path));
                 traitList.add(trait);
             } catch (IOException e) {
-                System.out.println(path + " not found.");
+                log.error(path + " not found.");
+                log.error(getStackTrace(e));
                 return false;
             } catch (RuntimeException e) {
-                System.out.println(e.getMessage());
+                log.error(getStackTrace(e));
                 return false;
             } catch (Exception e) {
-                System.out.println(e.getMessage());
+                log.error(getStackTrace(e));
                 return false;
             }
         }
@@ -197,9 +218,8 @@ public class UKB {
     }
 
     private boolean readGenes(String arg) {
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(Files.newInputStream(Paths.get(arg))))) {
-            String line;
-            while ((line = br.readLine()) != null) {
+        try (BufferedReader br = Files.newBufferedReader(Paths.get(arg))) {
+            br.lines().forEach(line -> {
                 String[] arr = line.trim().split(",");
                 if (arr.length < Gene.props) {
                     throw new RuntimeException("please use English comma within " + arg);
@@ -212,15 +232,16 @@ public class UKB {
                         Integer.parseInt(arr[4].trim()),
                         Integer.parseInt(arr[5].trim())
                 ));
-            }
+            });
         } catch (IOException e) {
-            System.out.println(arg + " not found.");
+            log.error(arg + " not found.");
+            log.error(getStackTrace(e));
             return false;
         } catch (RuntimeException e) {
-            System.out.println(e.getMessage());
+            log.error(getStackTrace(e));
             return false;
         } catch (Exception e) {
-            System.out.println(e.getMessage());
+            log.error(getStackTrace(e));
             return false;
         }
         return true;
@@ -317,25 +338,12 @@ public class UKB {
         private String name;
         private String type;
         private String threshold;
-        private String[] dataId;
+        private List<Integer> dataIdIndexes; // dataId索引
         private String[] ICD10;
         private String[] selfReport;
 
 
         public Trait() {}
-
-        @Override
-        public String toString() {
-            return "Trait{" +
-                    "name='" + name + '\'' +
-                    ", type='" + type + '\'' +
-                    ", threshold='" + threshold + '\'' +
-                    ", dataId=" + Arrays.toString(dataId) +
-                    ", ICD10=" + Arrays.toString(ICD10) +
-                    ", selfReport=" + Arrays.toString(selfReport) +
-                    '}';
-        }
-
 
         public String getName() {
             return name;
@@ -369,12 +377,12 @@ public class UKB {
             this.ICD10 = ICD10;
         }
 
-        public String[] getDataId() {
-            return dataId;
+        public List<Integer> getDataIdIndexes() {
+            return dataIdIndexes;
         }
 
-        public void setDataId(String[] dataId) {
-            this.dataId = dataId;
+        public void setDataIdIndexes(List<Integer> dataIdIndexes) {
+            this.dataIdIndexes = dataIdIndexes;
         }
 
         public String[] getSelfReport() {
@@ -401,37 +409,190 @@ public class UKB {
         }
     }
 
-//    public List<Gene> getGeneList() {
-//        return geneList;
-//    }
-//
-//    public List<Trait> getTraitList() {
-//        return traitList;
-//    }
+    private List<Gene> getGeneList() {
+        return geneList;
+    }
 
+    private List<Trait> getTraitList() {
+        return traitList;
+    }
 
-    // 提取性状
-    private void extract() {
-        // 使用CompletableFuture构建任务链
-        List<CompletableFuture<Void>> futures = new ArrayList<>();
-        for (Trait trait : traitList) {
-            List<CompletableFuture<Void>> stageFutures = new ArrayList<>();
-            String traitDir = OUTPUT + "/" + trait.getName();
-            CompletableFuture<Void> future = CompletableFuture.runAsync(new ProcessBuilderTask("mkdir -p " + traitDir));
-            // dataId
-            if (trait.getDataId() != null) {
-                for (String id : trait.getDataId()) {
-                    int n = fieldList.indexOf("p" + id);
-                    String cmd = String.format("awk -F, '(NR>1){print $1,$%d}' %s > %s", n, PARTICIPANT, OUTPUT + "/" + id + ".txt");
-                    stageFutures.add(future.thenRunAsync(new ProcessBuilderTask(cmd)));
-                }
-//                CompletableFuture.allOf(stageFutures)
+    private void createDirs(String dir) {
+        File f = new File(dir);
+        if (!f.exists()) {
+            f.mkdirs();
+        }
+    }
+    // 获取异常信息字符串
+    private String getStackTrace(Exception e) {
+        try (StringWriter sw = new StringWriter();
+                PrintWriter pw = new PrintWriter(sw)) {
+            e.printStackTrace(pw);
+            return sw.toString();
+        } catch (IOException ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
+    private String getStackTrace(Error e) {
+        try (StringWriter sw = new StringWriter();
+             PrintWriter pw = new PrintWriter(sw)) {
+            e.printStackTrace(pw);
+            return sw.toString();
+        } catch (IOException ex) {
+            throw new RuntimeException(ex);
+        }
+    }
+
+    /**
+     * 提取连续性性状
+     * @param idSets 作为case的样本Id集合
+     * @param values 每个样本的特征值数组
+     * @param dataIdIndexes 待提取特征索引
+     * @param thresh 连续性性状阈值
+     */
+    private void extractQuants(Set<String> idSets, String[] values, List<Integer> dataIdIndexes, double thresh) {
+
+        dataIdIndexes.forEach(i -> {
+            // 暂时设置大于阈值时为case
+            if (!values[i].isEmpty() && Double.parseDouble(values[i]) > thresh) {
+                idSets.add(values[0]);
+            }
+        });
+
+    }
+
+    /**
+     * 提取二分类性状
+     * @param idSets 作为case的样本Id集合
+     * @param values 每个样本的特征值数组
+     * @param dataIdIndexes 待提取特征索引
+     */
+    private void extractBinaries(Set<String> idSets, String[] values, List<Integer> dataIdIndexes) {
+        // 暂时规定值不为空就是case
+        dataIdIndexes.forEach(i -> {
+            if (!values[i].isEmpty()) {
+                idSets.add(values[0]);
+            }
+        });
+    }
+
+    /**
+     * 提取ICD10
+     * @param idSets
+     * @param values
+     * @param codes ICD10编码
+     */
+    private void extractICD10(Set<String> idSets, String[] values, String[] codes) {
+        for (String code : codes) {
+            if (values[1].contains(code)) {
+                idSets.add(values[0]);
+                break;
             }
         }
     }
 
+    /**
+     * 提取self-report
+     * @param idSets
+     * @param values
+     * @param names
+     */
+    private void extractSelfReport(Set<String> idSets, String[] values, String[] names) {
+        for (String name : names) {
+            if (values[1].equals(name)) {
+                idSets.add(values[0]);
+                break;
+            }
+        }
+    }
+
+    // 提取性状
+    private void extract() {
+        // trait对应case set
+        Map<String, Set<String>> caseMap = new HashMap<>();
+        // 有dataId的trait集合
+        List<Trait> traitHasDataId = new ArrayList<>();
+        // 有ICD10的trait集合
+        List<Trait> traitHasICD10 = new ArrayList<>();
+        // 有self-report的trait集合
+        List<Trait> traitHasSelfReport = new ArrayList<>();
+        traitList.forEach(trait -> {
+            caseMap.put(trait.getName(), new HashSet<>());
+            if (trait.getDataIdIndexes() != null) {
+                traitHasDataId.add(trait);
+            }
+            if (trait.getICD10() != null) {
+                traitHasICD10.add(trait);
+            }
+            if (trait.getSelfReport() != null) {
+                traitHasSelfReport.add(trait);
+            }
+        });
+        // a.获取来源于dataId的trait case
+        log.info("提取dataId来源......");
+        try(BufferedReader br = Files.newBufferedReader(Paths.get(PARTICIPANT))) {
+            // 跳过标题
+            br.readLine();
+            br.lines().forEach(line -> {
+                // 所有表型值
+                String[] values =  line.trim().split(",");
+                traitHasDataId.forEach(trait -> {
+                    if (trait.getType().equals("Q")) {
+                        extractQuants(caseMap.get(trait.getName()), values, trait.getDataIdIndexes(), Double.parseDouble(trait.getThreshold()));
+                    } else {
+                        extractBinaries(caseMap.get(trait.getName()), values, trait.getDataIdIndexes());
+                    }
+                });
+            });
+        } catch (Exception e) {
+            log.error("提取失败:\n" + getStackTrace(e));
+            System.exit(0);
+        }
+        log.info("提取成功！");
+        // b.获取来源于ICD10的trait case
+        log.info("提取ICD10来源......");
+        try(BufferedReader br = Files.newBufferedReader(Paths.get(ICD10))) {
+            br.readLine();
+            br.lines().forEach(line -> {
+                String[] values = line.trim().split(",");
+                if (values.length > 1) {
+                    traitHasICD10.forEach(trait -> extractICD10(caseMap.get(trait.getName()), values, trait.getICD10()));
+                }
+            });
+        } catch (Exception e) {
+            log.error("提取失败:\n" + getStackTrace(e));
+            System.exit(0);
+        }
+        log.info("提取成功！");
+        log.info("提取self-report来源......");
+        for (int i = 0; i <= 33; ++i) {
+            try (BufferedReader br = Files.newBufferedReader(Paths.get(String.format("%s/selfreport_%d.csv", SELFREPORT, i)))) {
+                br.readLine();
+                br.lines().forEach(line -> {
+                    String[] values = line.trim().split(",");
+                    if (values.length > 1) {
+                        traitHasSelfReport.forEach(trait -> extractSelfReport(caseMap.get(trait), values, trait.getSelfReport()));
+                    }
+                });
+            } catch (Exception e) {
+                log.error("提取失败:\n" + getStackTrace(e));
+                System.exit(0);
+            }
+        }
+        log.info("提取成功！");
+        caseMap.forEach((k, v) -> {
+            log.info(k + ":" + v.size());
+        });
+    }
+
+    public void run() {
+        extract();
+    }
     public static void main(String[] args) {
 //        UKB ukb = new UKB();
-        System.out.println(FileNameUtil.mainName("/a/b/c.tar.gz"));
+        String s = "123,";
+        String[] split = s.split(",");
+        System.out.println(split.length);
     }
 }
