@@ -7,7 +7,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class LogUtil {
+public final class LogUtil {
     private final static Map<Class<?>, Logger> loggerMap = new ConcurrentHashMap<>();
     
     private LogUtil(){}

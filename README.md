@@ -44,19 +44,26 @@ type：性状类型，连续性（Q）还是二分类（B）
 是否考虑性别，默认不考虑
 
 ## 方法
-```
---magma 
---pascal
---fusion
---iso 
---tf
---utmost
---spred
---smr
-```
-需要跑哪个方法就加上
+指定待执行方法的源目录（包含可执行文件，脚本，参考数据等资源），可从后面链接中下载。
+- `--magma` [下载可执行文件。Gene locations,build 37。Eurpean reference data](https://cncr.nl/research/magma/)
+- `--pascal` [下载]()
+- `--fusion` [下载]()
+- `--iso` [下载]()
+- `--tf` [下载]()
+- `--utmost` [下载]()
+- `--spred` [下载]()
+- `--smr` [下载]()
+- `--ldsc` [下载]()
 
 ## 其他
 ```--twas```
 
 默认gwas summary都已准备好，直接跑twas
+
+```--plink_path```
+
+plink路径
+
+```--gemma_path```
+
+gemma路径（计算summary）

@@ -16,12 +16,15 @@ public class App
                     "--genes [input_file]\n" +
                     "--traits [trait1,trait2,...,traitn]\n" +
                     "--plink [trait1,trait2,...,traitn]\n" +
-                    "--sex\n\n" +
+                    "--sex\n" +
+                    "--plink_path [path]\n" +
+                    "--gemma_path [path]\n" +
+                    "--[method1]\n--[method2]\n...\n\n" +
                     "You can access %s for more details.\n" +
-                    "Warning: you must use jdk8 and over!\n", GITHUB);
+                    "Warning: your java version must be equal to or greater than jdk8!!!\n", GITHUB);
         } else {
             UKB ukb = new UKB(args);
-            ukb.run();
+            ukb.start();
         }
     }
 }
