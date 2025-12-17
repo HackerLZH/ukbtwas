@@ -4,9 +4,12 @@ import cn.hutool.core.io.file.FileNameUtil;
 import com.lzh.method.AbstractMethodFactory;
 import com.lzh.method.MethodType;
 import com.lzh.util.LogUtil;
+import com.lzh.util.ProcessBuilderTask;
+import com.lzh.util.PropsUtil;
 import org.slf4j.Logger;
 
 import java.io.*;
+import java.lang.invoke.MethodHandle;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
@@ -15,13 +18,14 @@ import java.util.stream.Collectors;
 
 public class UKB {
 
-    private final List<Gene> geneList = new ArrayList<>();
-    private final List<Trait> traitList = new ArrayList<>();
+    public static final List<Gene> geneList = new ArrayList<>();
+    public static final List<Trait> traitList = new ArrayList<>();
     private final List<String> fieldList = new ArrayList<>();
-    private final List<String> sexList = new ArrayList<>();
-    private final Set<String> eurSet = new HashSet<>();
-    // 待执行方法及源目录
-    private final Map<MethodType, String> methodMap = new HashMap<>();
+    public static final List<String> sexList = new ArrayList<>();
+    // 基因位于哪些染色体
+    public static final Set<Integer> chrSet = new HashSet<>();
+    // 待执行方法
+    private final List<MethodType> methodList = new ArrayList<>();
     private final static Logger log = LogUtil.getLogger(UKB.class);
 
     // 线程池
@@ -31,8 +35,6 @@ public class UKB {
     private boolean twas;
     // 是否考虑性别
     private boolean sex;
-    // plink路径, gemma路径
-    private String plink, gemma;
     // dataId对应表格
     private static final String PARTICIPANT = "/gpfs/chencao/Temporary_Files/ukbb_features/participant2.csv";
     // ICD10对应表格
@@ -48,13 +50,17 @@ public class UKB {
     // DRAGEN_WGS
     private static final String DRAGEN_WGS = "/gpfs/chencao/Temporary_Files/DRAGEN_WGS";
     // 将当前工作目录+output作为输出目录
-    private static final String OUTPUT = System.getProperty("user.dir") + "/output";
-    //srun --mem=4g
-    private static final String SRUN_4G = "srun --mem=4g --partition=cu,privority,batch01,fat,gpu,A800 --cpus-per-task=1";
-    //srun --mem=8g
-    private static final String SRUN_8G = "srun --mem=8g --partition=cu,privority,batch01,fat,gpu,A800 --cpus-per-task=1";
-    //srun --mem=32g
-    private static final String SRUN_32G = "srun --mem=32g --partition=cu,privority,batch01,fat,gpu,A800 --cpus-per-task=1";
+    public static final String OUTPUT = System.getProperty("user.dir") + "/output";
+    // summary目录
+    public static final String SUMMARY = OUTPUT + "/summary";
+    // 结果目录
+    public static final String RESULT = OUTPUT + "/result";
+
+    private static final String PLINK = "plink";
+    private static final String GEMMA = "gemma";
+    public static final String SRUN_4G = "SRUN4G";
+    public static final String SRUN_8G = "SRUN8G";
+    public static final String SRUN_32G = "SRUN32G";
 
     private UKB(){}
 
@@ -96,60 +102,41 @@ public class UKB {
                         sexList.add("male");
                         sexList.add("female");
                         break;
-                    case "--plink_path":
-                        assert i < args.length - 1;
-                        plink = args[i + 1];
-                        i += 2;
-                        break;
-                    case "--gemma_path":
-                        assert i < args.length - 1;
-                        gemma = args[i + 1];
-                        i += 2;
-                        break;
                     case "--magma":
-                        assert i < args.length - 1;
-                        methodMap.put(MethodType.MAGMA, args[i + 1]);
-                        i += 2;
+                        methodList.add(MethodType.MAGMA);
+                        i++;
                         break;
                     case "--pascal":
-                        assert i < args.length - 1;
-                        methodMap.put(MethodType.PASCAL, args[i + 1]);
-                        i += 2;
+                        methodList.add(MethodType.PASCAL);
+                        i++;
                         break;
                     case "--fusion":
-                        assert i < args.length - 1;
-                        methodMap.put(MethodType.FUSION, args[i + 1]);
-                        i += 2;
+                        methodList.add(MethodType.FUSION);
+                        i++;
                         break;
                     case "--iso":
-                        assert i < args.length - 1;
-                        methodMap.put(MethodType.ISOTWAS, args[i + 1]);
-                        i += 2;
+                        methodList.add(MethodType.ISOTWAS);
+                        i++;
                         break;
                     case "--tf":
-                        assert i < args.length - 1;
-                        methodMap.put(MethodType.TFTWAS, args[i + 1]);
-                        i += 2;
+                        methodList.add(MethodType.TFTWAS);
+                        i++;
                         break;
                     case "--utmost":
-                        assert i < args.length - 1;
-                        methodMap.put(MethodType.UTMOST, args[i + 1]);
-                        i += 2;
+                        methodList.add(MethodType.UTMOST);
+                        i++;
                         break;
                     case "--spred":
-                        assert i < args.length - 1;
-                        methodMap.put(MethodType.SPREDIXCAN, args[i + 1]);
-                        i += 2;
+                        methodList.add(MethodType.SPREDIXCAN);
+                        i++;
                         break;
                     case "--smr":
-                        assert i < args.length - 1;
-                        methodMap.put(MethodType.SMR, args[i + 1]);
-                        i += 2;
+                        methodList.add(MethodType.SMR);
+                        i++;
                         break;
                     case "--ldsc":
-                        assert i < args.length - 1;
-                        methodMap.put(MethodType.LDSC, args[i + 1]);
-                        i += 2;
+                        methodList.add(MethodType.LDSC);
+                        i++;
                         break;
                     case "--twas":
                         i++;
@@ -264,6 +251,7 @@ public class UKB {
                         Integer.parseInt(arr[5].trim())
                 ));
             });
+            geneList.forEach(gene -> chrSet.add(gene.getChr()));
         } catch (IOException e) {
             log.error(arg + " not found.");
             log.error(getStackTrace(e));
@@ -278,7 +266,7 @@ public class UKB {
         return true;
     }
 
-    private static class Gene {
+    public static class Gene {
         private final static int props = 6;
         // GeneSymbol,NCBIGene,Ensembl,chr,start,end
         private String symbol;
@@ -360,7 +348,7 @@ public class UKB {
         }
     }
 
-    private static class Trait {
+    public static class Trait {
 //        type: [Q|B]
 //        threshold:30
 //        dataId:21001,23104
@@ -422,21 +410,6 @@ public class UKB {
 
         public void setSelfReport(String[] selfReport) {
             this.selfReport = selfReport;
-        }
-    }
-    // 执行外部命令的异步任务
-    private static class ProcessBuilderTask implements Runnable {
-        String cmd;
-        public ProcessBuilderTask(String cmd) {
-            this.cmd = cmd;
-        }
-        @Override
-        public void run() {
-            try {
-                new ProcessBuilder("sh", "-c", cmd).start().waitFor();
-            } catch (InterruptedException | IOException e) {
-                throw new RuntimeException(e);
-            }
         }
     }
 
@@ -630,7 +603,7 @@ public class UKB {
         Map<String, BufferedWriter> bwMap = new HashMap<>();
         caseMap.forEach((name, set) -> {
             try {
-                bwMap.put(name, Files.newBufferedWriter(Paths.get(OUTPUT + "/" + name + ".code")));
+                bwMap.put(name, Files.newBufferedWriter(Paths.get(SUMMARY + "/" + name + ".code")));
             } catch (IOException e) {
                 log.error(getStackTrace(e));
                 System.exit(0);
@@ -669,14 +642,14 @@ public class UKB {
         List<CompletableFuture<Void>> futures = new ArrayList<>();
         geneList.forEach(gene -> {
             // 相同染色体无需重复处理
-            if (!createDirs(OUTPUT + "/" + gene.getChr())) {
+            if (!createDirs(SUMMARY + "/" + gene.getChr())) {
                 return;
             }
             traitList.forEach(trait -> {
-                String o = OUTPUT + "/" + gene.getChr() + "/" + trait.getName() + "/all";
+                String o = SUMMARY + "/" + gene.getChr() + "/" + trait.getName() + "/all";
                 createDirs(o);
                 String paste = String.format("paste -d' ' %s/chr%d.fam %s > %s",
-                        DRAGEN_WGS, gene.getChr(), OUTPUT + "/" + trait.getName() + ".code", o + "/plink.fam");
+                        DRAGEN_WGS, gene.getChr(), SUMMARY + "/" + trait.getName() + ".code", o + "/plink.fam");
                 String lnsBed = String.format("ln -s %s/chr%d.bed %s", DRAGEN_WGS, gene.getChr(), o + "/plink.bed");
                 String lnsBim = String.format("ln -s %s/chr%d.bim %s", DRAGEN_WGS, gene.getChr(), o + "/plink.bim");
                 futures.add(CompletableFuture.runAsync(new ProcessBuilderTask(paste))
@@ -707,9 +680,9 @@ public class UKB {
                     ++i;
                 }
                 traitList.forEach(trait -> {
-                    try (BufferedReader br = Files.newBufferedReader(Paths.get(OUTPUT + "/" + trait.getName() + ".code"));
-                            BufferedWriter bw1 = Files.newBufferedWriter(Paths.get(OUTPUT + "/" + trait.getName() + "_male.code"));
-                            BufferedWriter bw2 = Files.newBufferedWriter(Paths.get(OUTPUT + "/" + trait.getName() + "_female.code"))) {
+                    try (BufferedReader br = Files.newBufferedReader(Paths.get(SUMMARY + "/" + trait.getName() + ".code"));
+                            BufferedWriter bw1 = Files.newBufferedWriter(Paths.get(SUMMARY + "/" + trait.getName() + "_male.code"));
+                            BufferedWriter bw2 = Files.newBufferedWriter(Paths.get(SUMMARY + "/" + trait.getName() + "_female.code"))) {
                         List<String> codes = br.lines().collect(Collectors.toList());
                         for (int index : maleIndex) {
                             bw1.write(codes.get(index) + "\n");
@@ -728,19 +701,19 @@ public class UKB {
             // plink --keep
             futures.clear();
             geneList.forEach(gene -> traitList.forEach(trait -> {
-                String in = OUTPUT + "/" + gene.getChr() + "/" + trait.getName() + "/all";
-                String o1 = OUTPUT + "/" + gene.getChr() + "/" + trait.getName() + "/male";
-                String o2 = OUTPUT + "/" + gene.getChr() + "/" + trait.getName() + "/female";
+                String in = SUMMARY + "/" + gene.getChr() + "/" + trait.getName() + "/all";
+                String o1 = SUMMARY + "/" + gene.getChr() + "/" + trait.getName() + "/male";
+                String o2 = SUMMARY + "/" + gene.getChr() + "/" + trait.getName() + "/female";
                 createDirs(o1);
                 createDirs(o2);
                 String plink1 = String.format("%s --bfile %s --keep %s --memory 4096 --make-bed --out %s",
-                                                    plink, in + "/plink", EUR_MALE, o1 + "/plink");
+                                                    PropsUtil.getProp(PLINK), in + "/plink", EUR_MALE, o1 + "/plink");
                 String plink2 = String.format("%s --bfile %s --keep %s --memory 4096 --make-bed --out %s",
-                                                    plink, in + "/plink", EUR_FEMALE, o2 + "/plink");
+                                                    PropsUtil.getProp(PLINK), in + "/plink", EUR_FEMALE, o2 + "/plink");
                 String paste1 = String.format("paste -d' ' %s %s > %s && mv %s %s",
-                        o1 + "/plink.fam", OUTPUT + "/" + trait.getName() + "_male.code", o1 + "/tmp.txt", o1 + "/tmp.txt", o1 + "/plink.fam");
+                        o1 + "/plink.fam", SUMMARY + "/" + trait.getName() + "_male.code", o1 + "/tmp.txt", o1 + "/tmp.txt", o1 + "/plink.fam");
                 String paste2 = String.format("paste -d' ' %s %s > %s && mv %s %s",
-                        o2 + "/plink.fam", OUTPUT + "/" + trait.getName() + "_female.code", o2 + "/tmp.txt", o2 + "/tmp.txt", o2 + "/plink.fam");
+                        o2 + "/plink.fam", SUMMARY + "/" + trait.getName() + "_female.code", o2 + "/tmp.txt", o2 + "/tmp.txt", o2 + "/plink.fam");
                 futures.add(CompletableFuture.runAsync(new ProcessBuilderTask(plink1)).thenRunAsync(new ProcessBuilderTask(paste1)));
                 futures.add(CompletableFuture.runAsync(new ProcessBuilderTask(plink2)).thenRunAsync(new ProcessBuilderTask(paste2)));
             }));
@@ -750,9 +723,9 @@ public class UKB {
         futures.clear();
         geneList.forEach(gene -> traitList.forEach(trait -> {
             sexList.forEach(s -> {
-                String dir = OUTPUT + "/" + gene.getChr() + "/" + trait.getName() + "/" + s;
+                String dir = SUMMARY + "/" + gene.getChr() + "/" + trait.getName() + "/" + s;
                 String cmd = String.format("cd %s && %s %s -bfile %s -notsnp -n 2 -lm 1 -o summ",
-                                            dir, SRUN_4G, gemma, dir + "/plink");
+                                            dir, PropsUtil.getProp(SRUN_4G), PropsUtil.getProp(GEMMA), dir + "/plink");
                 futures.add(CompletableFuture.runAsync(new ProcessBuilderTask("ls"))
                                                 .thenRunAsync(() -> {
                                                     String summ1 = dir + "/output/summ.assoc.txt";
@@ -804,10 +777,36 @@ public class UKB {
 
     private void run() {
         log.info("summary准备完毕，开始执行TWAS......");
+        try {
+            Files.createDirectories(Paths.get(RESULT));
+        } catch (IOException e) {
+            log.error(getStackTrace(e));
+            System.exit(0);
+        }
         List<CompletableFuture<Void>> futures = new ArrayList<>();
-        methodMap.forEach((m, d) -> {
-            futures.add(CompletableFuture.runAsync(() -> AbstractMethodFactory.getMethod(m, d).execute()));
-        });
+        // pascal只能顺序执行，避免文件覆盖
+//        if (methodList.contains(MethodType.PASCAL)) {
+//            futures.add(CompletableFuture.runAsync(() -> AbstractMethodFactory.getMethod(MethodType.PASCAL, null, null).execute()));
+//        }
+        // 其他方法按性状性别划分
+//        methodList.forEach(
+//                m -> {
+//                    if (m == MethodType.PASCAL) {
+//                        return;
+//                    }
+//                    traitList.forEach(
+//                        trait -> sexList.forEach(sex -> {
+//                            futures.add(CompletableFuture.runAsync(() -> AbstractMethodFactory.getMethod(m, trait, sex).execute()));
+//                        })
+//                    );
+//                }
+//        );
+        traitList.forEach(
+            trait -> sexList.forEach(sex -> {
+                futures.add(CompletableFuture.runAsync(() -> AbstractMethodFactory.getMethod(MethodType.ISOTWAS, trait, sex).execute()));
+            })
+        );
+
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
         log.info("执行完毕！");
     }
@@ -815,11 +814,5 @@ public class UKB {
     public void start() {
 //        extract();
         run();
-    }
-    public static void main(String[] args) {
-//        UKB ukb = new UKB();
-        String s = "123,";
-        String[] split = s.split(",");
-        System.out.println(split.length);
     }
 }
