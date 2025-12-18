@@ -18,7 +18,9 @@ import java.util.stream.Collectors;
 public class ResultUtil {
     private List<Result> resultList = new ArrayList<>();
     private List<LDSCResult> ldscResultList = new ArrayList<>();
+    private List<ISOResult> isoResultList = new ArrayList<>();
     private static final String TISSUE = "Whole Blood";
+    private static final String decimalFmt = "%.2e";
 
     public void pascal(MethodType type) {
         for (UKB.Gene gene : UKB.geneList) {
@@ -36,7 +38,7 @@ public class ResultUtil {
                                         , trait.getName()
                                         , sex
                                         , "-"
-                                        , String.format("%.4f", Double.parseDouble(lines[7]))
+                                        , String.format(decimalFmt, Double.parseDouble(lines[7]))
                                         , "-"
                                         , "-"
                                 ));
@@ -67,8 +69,8 @@ public class ResultUtil {
                                         , trait.getName()
                                         , sex
                                         , "-"
-                                        , String.format("%.4f", Double.parseDouble(lines[8]))
-                                        , String.format("%.4f", Double.parseDouble(lines[7]))
+                                        , String.format(decimalFmt, Double.parseDouble(lines[8]))
+                                        , String.format(decimalFmt, Double.parseDouble(lines[7]))
                                         , "-"
                                 ));
                                 break;
@@ -98,9 +100,9 @@ public class ResultUtil {
                                         , trait.getName()
                                         , sex
                                         , TISSUE
-                                        , String.format("%.4f", Double.parseDouble(lines[4]))
-                                        , String.format("%.4f", Double.parseDouble(lines[2]))
-                                        , String.format("%.4f", Double.parseDouble(lines[3]))
+                                        , String.format(decimalFmt, Double.parseDouble(lines[4]))
+                                        , String.format(decimalFmt, Double.parseDouble(lines[2]))
+                                        , String.format(decimalFmt, Double.parseDouble(lines[3]))
                                 ));
                                 break;
                             }
@@ -130,9 +132,9 @@ public class ResultUtil {
                                             , trait.getName()
                                             , sex
                                             , tissue
-                                            , String.format("%.4f", Double.parseDouble(lines[4]))
-                                            , String.format("%.4f", Double.parseDouble(lines[2]))
-                                            , String.format("%.4f", Double.parseDouble(lines[3]))
+                                            , String.format(decimalFmt, Double.parseDouble(lines[4]))
+                                            , String.format(decimalFmt, Double.parseDouble(lines[2]))
+                                            , String.format(decimalFmt, Double.parseDouble(lines[3]))
                                     ));
                                     break;
                                 }
@@ -156,8 +158,8 @@ public class ResultUtil {
                         for (String line : list) {
                             String[] lines = line.split("\\s+");
                             if (lines[2].startsWith(gene.getEnsembl())) {
-                                String P = lines[20].equals("NA") ? "NA" : String.format("%.4f", Double.parseDouble(lines[20]));
-                                String Z = lines[19].equals("NA") ? "NA" : String.format("%.4f", Double.parseDouble(lines[19]));
+                                String P = lines[19].equals("NA") ? "NA" : String.format(decimalFmt, Double.parseDouble(lines[19]));
+                                String Z = lines[18].equals("NA") ? "NA" : String.format(decimalFmt, Double.parseDouble(lines[18]));
                                 resultList.add(new Result(
                                         type.name
                                         , gene.getSymbol()
@@ -195,9 +197,9 @@ public class ResultUtil {
                                         , trait.getName()
                                         , sex
                                         , TISSUE
-                                        , String.format("%.4f", Double.parseDouble(lines[18]))
+                                        , String.format(decimalFmt, Double.parseDouble(lines[18]))
                                         , "-"
-                                        , String.format("%.4f", Double.parseDouble(lines[16]))
+                                        , String.format(decimalFmt, Double.parseDouble(lines[16]))
                                 ));
                                 break;
                             }
@@ -220,8 +222,8 @@ public class ResultUtil {
                         for (String line : list) {
                             String[] lines = line.split("\\s+");
                             if (lines[0].equals(gene.getSymbol())) {
-                                String Z = lines[1].equals("NA") ? "NA" : String.format("%.4f", Double.parseDouble(lines[1]));
-                                String P = lines[2].equals("NA") ? "NA" : String.format("%.4f", Double.parseDouble(lines[2]));
+                                String Z = lines[1].equals("NA") ? "NA" : String.format(decimalFmt, Double.parseDouble(lines[1]));
+                                String P = lines[2].equals("NA") ? "NA" : String.format(decimalFmt, Double.parseDouble(lines[2]));
                                 resultList.add(new Result(
                                         type.name
                                         , gene.getSymbol()
@@ -256,7 +258,7 @@ public class ResultUtil {
                                     type.name
                                     , trait.getName()
                                     , sex
-                                    , String.format("%.4f", Double.parseDouble(h))
+                                    , String.format(decimalFmt, Double.parseDouble(h))
                             ));
                         }
                     }
@@ -267,12 +269,29 @@ public class ResultUtil {
         }
     }
 
-    // TODO isoTWAS结果改为存文本，方便处理
     public void iso(MethodType type) {
         for (UKB.Gene gene : UKB.geneList) {
             for (UKB.Trait trait : UKB.traitList) {
                 for (String sex : UKB.sexList) {
-
+                    String result = input(trait.getName(), gene.getChr(), sex, type.name) + "/" + gene.getEnsembl() + ".txt";
+                    try (BufferedReader br = Files.newBufferedReader(Paths.get(result))) {
+                        br.readLine();
+                        br.lines().forEach(line -> {
+                            String[] lines = line.split("\\s+");
+                            isoResultList.add(new ISOResult(
+                                    type.name
+                                    , trait.getName()
+                                    , sex
+                                    , TISSUE
+                                    , gene.getSymbol()
+                                    , lines[1]
+                                    , String.format(decimalFmt, Double.parseDouble(lines[3]))
+                                    , String.format(decimalFmt, Double.parseDouble(lines[2]))
+                            ));
+                        });
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
                 }
             }
         }
@@ -322,10 +341,32 @@ public class ResultUtil {
         }
     }
 
+    private static class ISOResult {
+        String method;
+        String trait;
+        String sex;
+        String tissue;
+        String gene;
+        String feature;
+        String p;
+        String z;
+
+        public ISOResult(String method, String trait, String sex, String tissue, String gene, String feature, String p, String z) {
+            this.method = method;
+            this.trait = trait;
+            this.sex = sex;
+            this.tissue = tissue;
+            this.gene = gene;
+            this.feature = feature;
+            this.p = p;
+            this.z = z;
+        }
+    }
+
     public void write() {
         if (!resultList.isEmpty()) {
             try (BufferedWriter bw = Files.newBufferedWriter(Paths.get(UKB.RESULT + "/result.txt"))) {
-                bw.write("method\tgene\ttrait\tsex\ttissue\tp\tz\tbeta");
+                bw.write("method\tgene\ttrait\tsex\ttissue\tp\tz\tbeta\n");
                 for (Result result : resultList) {
                     StringBuilder sb = new StringBuilder();
                     sb.append(result.method)
@@ -353,7 +394,7 @@ public class ResultUtil {
 
         if (!ldscResultList.isEmpty()) {
             try (BufferedWriter bw = Files.newBufferedWriter(Paths.get(UKB.RESULT + "/ldsc.txt"))) {
-                bw.write("method\ttrait\tsex\th");
+                bw.write("method\ttrait\tsex\th\n");
                 for (LDSCResult result : ldscResultList) {
                     StringBuilder sb = new StringBuilder();
                     sb.append(result.method)
@@ -363,6 +404,34 @@ public class ResultUtil {
                             .append(result.sex)
                             .append("\t")
                             .append(result.h)
+                            .append("\n");
+                    bw.write(sb.toString());
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        if (!isoResultList.isEmpty()) {
+            try (BufferedWriter bw = Files.newBufferedWriter(Paths.get(UKB.RESULT + "/iso.txt"))) {
+                bw.write("method\ttrait\tsex\ttissue\tgene\tisoform\tp\tz\n");
+                for (ISOResult result : isoResultList) {
+                    StringBuilder sb = new StringBuilder();
+                    sb.append(result.method)
+                            .append("\t")
+                            .append(result.trait)
+                            .append("\t")
+                            .append(result.sex)
+                            .append("\t")
+                            .append(result.tissue)
+                            .append("\t")
+                            .append(result.gene)
+                            .append("\t")
+                            .append(result.feature)
+                            .append("\t")
+                            .append(result.p)
+                            .append("\t")
+                            .append(result.z)
                             .append("\n");
                     bw.write(sb.toString());
                 }

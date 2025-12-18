@@ -29,11 +29,10 @@ public class UKB {
     private final List<MethodType> methodList = new ArrayList<>();
     private final static Logger log = LogUtil.getLogger(UKB.class);
 
-    // 线程池
-//    private ExecutorService pool;
+    private boolean step1; // 预处理
+    private boolean step2; // 分析
+    private boolean step3; // 收集结果
 
-    // 是否直接开始twas
-    private boolean twas;
     // 是否考虑性别
     private boolean sex;
     // dataId对应表格
@@ -70,7 +69,7 @@ public class UKB {
             boolean geneOk = false;
             boolean traitOk = false;
             boolean plinkOk = false;
-            twas = false;
+            step1 = step2 = step3 = false;
             sex = false;
             sexList.add("all");
             // 读取UKB dataID列表
@@ -91,10 +90,10 @@ public class UKB {
                         traitOk = readTraits(args[i + 1]);
                         i += 2;
                         break;
-                    case "--plink":
+                    case "--plinks":
                         assert i < args.length - 1;
                         // 读取bed/bim/fam
-                        plinkOk = readPlink(args[i + 1]);
+                        plinkOk = readPlinks(args[i + 1]);
                         i += 2;
                         break;
                     case "--sex":
@@ -139,9 +138,17 @@ public class UKB {
                         methodList.add(MethodType.LDSC);
                         i++;
                         break;
-                    case "--twas":
+                    case "--step1":
                         i++;
-                        twas = true;
+                        step1 = true;
+                        break;
+                    case "--step2":
+                        i++;
+                        step2 = true;
+                        break;
+                    case "--step3":
+                        i++;
+                        step3 = true;
                         break;
                     default:
                         log.error("invalid option with " + args[i]);
@@ -159,8 +166,6 @@ public class UKB {
                 System.exit(0);
             }
 
-            // 固定线程池（任务不会很多，不用担心OOM）
-//            pool = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() + 1);
         } catch (AssertionError e) {
             log.error("No params after options");
             log.error(getStackTrace(e));
@@ -177,8 +182,9 @@ public class UKB {
         }
     }
 
-    private boolean readPlink(String arg) {
+    private boolean readPlinks(String arg) {
         // TODO readPlink
+
         return true;
     }
 
@@ -596,9 +602,18 @@ public class UKB {
         }
         log.info("提取成功！");
 
-        caseMap.forEach((k, v) -> {
-            log.info(k + ":" + v.size());
-        });
+//        caseMap.forEach((k, v) -> {
+//            log.info(k + ":" + v.size());
+//        });
+
+        // 创建summary目录
+        try {
+            Files.createDirectories(Paths.get(SUMMARY));
+        } catch (IOException e) {
+            log.error(getStackTrace(e));
+            System.exit(0);
+        }
+
 
         // 和eur id求交集输出trait code，其中case=1,control=0
         Map<String, BufferedWriter> bwMap = new HashMap<>();
@@ -641,23 +656,21 @@ public class UKB {
 
         // bed/bim/fam
         List<CompletableFuture<Void>> futures = new ArrayList<>();
-        geneList.forEach(gene -> {
-            // 相同染色体无需重复处理
-            if (!createDirs(SUMMARY + "/" + gene.getChr())) {
-                return;
-            }
+        chrSet.forEach(chr -> {
             traitList.forEach(trait -> {
-                String o = SUMMARY + "/" + gene.getChr() + "/" + trait.getName() + "/all";
+                String o = SUMMARY + "/" + chr + "/" + trait.getName() + "/all";
                 createDirs(o);
                 String paste = String.format("paste -d' ' %s/chr%d.fam %s > %s",
-                        DRAGEN_WGS, gene.getChr(), SUMMARY + "/" + trait.getName() + ".code", o + "/plink.fam");
-                String lnsBed = String.format("ln -s %s/chr%d.bed %s", DRAGEN_WGS, gene.getChr(), o + "/plink.bed");
-                String lnsBim = String.format("ln -s %s/chr%d.bim %s", DRAGEN_WGS, gene.getChr(), o + "/plink.bim");
+                        DRAGEN_WGS, chr, SUMMARY + "/" + trait.getName() + ".code", o + "/plink.fam");
+                String lnsBed = String.format("ln -s %s/chr%d.bed %s", DRAGEN_WGS, chr, o + "/plink.bed");
+                String lnsBim = String.format("ln -s %s/chr%d.bim %s", DRAGEN_WGS, chr, o + "/plink.bim");
                 futures.add(CompletableFuture.runAsync(new ProcessBuilderTask(paste))
                         .thenRunAsync(new ProcessBuilderTask(lnsBed)).thenRunAsync(new ProcessBuilderTask(lnsBim)));
             });
         });
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        // TODO maybe plinks begin here
+
         // 考虑性别
         if (sex) {
             Set<String> maleSet = new HashSet<>();
@@ -701,16 +714,16 @@ public class UKB {
             }
             // plink --keep
             futures.clear();
-            geneList.forEach(gene -> traitList.forEach(trait -> {
-                String in = SUMMARY + "/" + gene.getChr() + "/" + trait.getName() + "/all";
-                String o1 = SUMMARY + "/" + gene.getChr() + "/" + trait.getName() + "/male";
-                String o2 = SUMMARY + "/" + gene.getChr() + "/" + trait.getName() + "/female";
+            chrSet.forEach(chr -> traitList.forEach(trait -> {
+                String in = SUMMARY + "/" + chr + "/" + trait.getName() + "/all";
+                String o1 = SUMMARY + "/" + chr + "/" + trait.getName() + "/male";
+                String o2 = SUMMARY + "/" + chr + "/" + trait.getName() + "/female";
                 createDirs(o1);
                 createDirs(o2);
-                String plink1 = String.format("%s --bfile %s --keep %s --memory 4096 --make-bed --out %s",
-                                                    PropsUtil.getProp(PLINK), in + "/plink", EUR_MALE, o1 + "/plink");
-                String plink2 = String.format("%s --bfile %s --keep %s --memory 4096 --make-bed --out %s",
-                                                    PropsUtil.getProp(PLINK), in + "/plink", EUR_FEMALE, o2 + "/plink");
+                String plink1 = String.format("%s %s --bfile %s --keep %s --memory 4096 --make-bed --out %s",
+                                                    PropsUtil.getProp(SRUN_4G), PropsUtil.getProp(PLINK), in + "/plink", EUR_MALE, o1 + "/plink");
+                String plink2 = String.format("%s %s --bfile %s --keep %s --memory 4096 --make-bed --out %s",
+                                                    PropsUtil.getProp(SRUN_4G), PropsUtil.getProp(PLINK), in + "/plink", EUR_FEMALE, o2 + "/plink");
                 String paste1 = String.format("paste -d' ' %s %s > %s && mv %s %s",
                         o1 + "/plink.fam", SUMMARY + "/" + trait.getName() + "_male.code", o1 + "/tmp.txt", o1 + "/tmp.txt", o1 + "/plink.fam");
                 String paste2 = String.format("paste -d' ' %s %s > %s && mv %s %s",
@@ -720,59 +733,57 @@ public class UKB {
             }));
             CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
         }
-        log.info("plink准备完毕，开始计算summary（大约耗时1h，请耐心等待）");
+        log.info("plink准备完毕，开始计算summary（大约耗时1~2h，请耐心等待）");
         futures.clear();
-        geneList.forEach(gene -> traitList.forEach(trait -> {
-            sexList.forEach(s -> {
-                String dir = SUMMARY + "/" + gene.getChr() + "/" + trait.getName() + "/" + s;
-                String cmd = String.format("cd %s && %s %s -bfile %s -notsnp -n 2 -lm 1 -o summ",
-                                            dir, PropsUtil.getProp(SRUN_4G), PropsUtil.getProp(GEMMA), dir + "/plink");
-                futures.add(CompletableFuture.runAsync(new ProcessBuilderTask("ls"))
-                                                .thenRunAsync(() -> {
-                                                    String summ1 = dir + "/output/summ.assoc.txt";
-                                                    String summ2 = dir + "/output/summ2.assoc.txt";
-                                                    try (BufferedReader br = Files.newBufferedReader(Paths.get(summ1));
-                                                         BufferedWriter bw = Files.newBufferedWriter(Paths.get(summ2));
-                                                         BufferedReader hg37 = Files.newBufferedReader(Paths.get("/gpfs/chencao/Temporary_Files/chr" + gene.getChr() + "_hg37"))) {
-                                                        // hg38 -> hg37
-                                                        Map<String, String[]> map = new HashMap<>();
-                                                        Set<String> set = new HashSet<>();
-                                                        long maxPos = 0, minPos;
-                                                        // 写入标题
-                                                        bw.write(String.join(" ", br.readLine().split("\\s+")) + "\n");
-                                                        // 从第一行获取最小pos
-                                                        String line = br.readLine();
-                                                        String[] lines = line.split("\\s+");
-                                                        minPos = Long.parseLong(lines[2]);
+        chrSet.forEach(chr -> traitList.forEach(trait -> sexList.forEach(s -> {
+            String dir = SUMMARY + "/" + chr + "/" + trait.getName() + "/" + s;
+            String cmd = String.format("cd %s && %s %s -bfile %s -notsnp -n 2 -lm 1 -o summ",
+                                        dir, PropsUtil.getProp(SRUN_4G), PropsUtil.getProp(GEMMA), dir + "/plink");
+            futures.add(CompletableFuture.runAsync(new ProcessBuilderTask(cmd))
+                                            .thenRunAsync(() -> {
+                                                String summ1 = dir + "/output/summ.assoc.txt";
+                                                String summ2 = dir + "/output/summ2.assoc.txt";
+                                                try (BufferedReader br = Files.newBufferedReader(Paths.get(summ1));
+                                                     BufferedWriter bw = Files.newBufferedWriter(Paths.get(summ2));
+                                                     BufferedReader hg37 = Files.newBufferedReader(Paths.get("/gpfs/chencao/Temporary_Files/chr" + chr + "_hg37"))) {
+                                                    // hg38 -> hg37
+                                                    Map<String, String[]> map = new HashMap<>();
+                                                    Set<String> set = new HashSet<>();
+                                                    long maxPos = 0, minPos;
+                                                    // 写入标题
+                                                    bw.write(String.join(" ", br.readLine().split("\\s+")) + "\n");
+                                                    // 从第一行获取最小pos
+                                                    String line = br.readLine();
+                                                    String[] lines = line.split("\\s+");
+                                                    minPos = Long.parseLong(lines[2]);
+                                                    map.put(lines[1], lines);
+                                                    while ((line = br.readLine()) != null) {
+                                                        lines = line.split("\\s+");
+                                                        maxPos = Long.parseLong(lines[2]);
                                                         map.put(lines[1], lines);
-                                                        while ((line = br.readLine()) != null) {
-                                                            lines = line.split("\\s+");
-                                                            maxPos = Long.parseLong(lines[2]);
-                                                            map.put(lines[1], lines);
-                                                        }
-                                                        while ((line = hg37.readLine()) != null) {
-                                                            lines = line.split("\\s+");
-                                                            if (Long.parseLong(lines[1]) < minPos) {
-                                                                continue;
-                                                            }
-                                                            if (Long.parseLong(lines[1]) > maxPos) {
-                                                                break;
-                                                            }
-                                                            if (map.containsKey(lines[2]) && !set.contains(lines[2])) {
-                                                                String[] finalLine = map.get(lines[2]);
-                                                                finalLine[2] = lines[1];
-                                                                set.add(lines[2]);
-                                                                bw.write(String.join(" ", finalLine) + "\n");
-                                                            }
-                                                        }
-                                                        // 删除原summ
-                                                        Files.delete(Paths.get(summ1));
-                                                    } catch (IOException e) {
-                                                        throw new RuntimeException(e);
                                                     }
-                                                }));
-                });
-        }));
+                                                    while ((line = hg37.readLine()) != null) {
+                                                        lines = line.split("\\s+");
+                                                        if (Long.parseLong(lines[1]) < minPos) {
+                                                            continue;
+                                                        }
+                                                        if (Long.parseLong(lines[1]) > maxPos) {
+                                                            break;
+                                                        }
+                                                        if (map.containsKey(lines[2]) && !set.contains(lines[2])) {
+                                                            String[] finalLine = map.get(lines[2]);
+                                                            finalLine[2] = lines[1];
+                                                            set.add(lines[2]);
+                                                            bw.write(String.join(" ", finalLine) + "\n");
+                                                        }
+                                                    }
+                                                    // 删除原summ
+                                                    Files.delete(Paths.get(summ1));
+                                                } catch (IOException e) {
+                                                    throw new RuntimeException(e);
+                                                }
+                                            }));
+            })));
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
     }
 
@@ -853,10 +864,21 @@ public class UKB {
     }
 
     public void start() {
-        extract();
-//        run();
-//        collect();
+        // 默认全部执行
+        if (!step1 && !step2 && !step3) {
+            extract();
+            run();
+            collect();
+            return;
+        }
+        if (step1) {
+            extract();
+        }
+        if (step2) {
+            run();
+        }
+        if (step3) {
+            collect();
+        }
     }
-
-
 }

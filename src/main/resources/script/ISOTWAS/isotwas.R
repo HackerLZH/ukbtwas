@@ -60,4 +60,4 @@ g <- opt$gene
   }
 
 dir.create(opt$out, recursive = TRUE)
-saveRDS(out_df, paste0(opt$out, "/", g, ".RDS"))
+write.table(out_df, file = paste0(opt$out, "/", g, ".txt"), sep="\t", quote=F, row.names=F)
