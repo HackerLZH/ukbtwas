@@ -6,6 +6,7 @@ import com.lzh.method.MethodType;
 import com.lzh.util.LogUtil;
 import com.lzh.util.ProcessBuilderTask;
 import com.lzh.util.PropsUtil;
+import com.lzh.util.ResultUtil;
 import org.slf4j.Logger;
 
 import java.io.*;
@@ -247,8 +248,8 @@ public class UKB {
                         Integer.parseInt(arr[1].trim()),
                         Integer.parseInt(arr[3].trim()),
                         arr[2].trim(),
-                        Integer.parseInt(arr[4].trim()),
-                        Integer.parseInt(arr[5].trim())
+                        Long.parseLong(arr[4].trim()),
+                        Long.parseLong(arr[5].trim())
                 ));
             });
             geneList.forEach(gene -> chrSet.add(gene.getChr()));
@@ -273,12 +274,12 @@ public class UKB {
         private Integer ncbi;
         private String ensembl;
         private Integer chr;
-        private Integer start;
-        private Integer end;
+        private Long start;
+        private Long end;
 
         private Gene() {}
 
-        public Gene(String symbol, Integer ncbi, Integer chr, String ensembl, Integer start, Integer end) {
+        public Gene(String symbol, Integer ncbi, Integer chr, String ensembl, Long start, Long end) {
             this.symbol = symbol;
             this.ncbi = ncbi;
             this.chr = chr;
@@ -331,19 +332,19 @@ public class UKB {
             this.chr = chr;
         }
 
-        public Integer getStart() {
+        public Long getStart() {
             return start;
         }
 
-        public void setStart(Integer start) {
+        public void setStart(Long start) {
             this.start = start;
         }
 
-        public Integer getEnd() {
+        public Long getEnd() {
             return end;
         }
 
-        public void setEnd(Integer end) {
+        public void setEnd(Long end) {
             this.end = end;
         }
     }
@@ -585,7 +586,7 @@ public class UKB {
                 br.lines().forEach(line -> {
                     String[] values = line.trim().split(",");
                     if (values.length > 1) {
-                        traitHasSelfReport.forEach(trait -> extractSelfReport(caseMap.get(trait), values, trait.getSelfReport()));
+                        traitHasSelfReport.forEach(trait -> extractSelfReport(caseMap.get(trait.getName()), values, trait.getSelfReport()));
                     }
                 });
             } catch (Exception e) {
@@ -785,34 +786,77 @@ public class UKB {
         }
         List<CompletableFuture<Void>> futures = new ArrayList<>();
         // pascal只能顺序执行，避免文件覆盖
-//        if (methodList.contains(MethodType.PASCAL)) {
-//            futures.add(CompletableFuture.runAsync(() -> AbstractMethodFactory.getMethod(MethodType.PASCAL, null, null).execute()));
-//        }
+        if (methodList.contains(MethodType.PASCAL)) {
+            futures.add(CompletableFuture.runAsync(() -> AbstractMethodFactory.getMethod(MethodType.PASCAL, null, null).execute()));
+        }
         // 其他方法按性状性别划分
-//        methodList.forEach(
-//                m -> {
-//                    if (m == MethodType.PASCAL) {
-//                        return;
-//                    }
-//                    traitList.forEach(
-//                        trait -> sexList.forEach(sex -> {
-//                            futures.add(CompletableFuture.runAsync(() -> AbstractMethodFactory.getMethod(m, trait, sex).execute()));
-//                        })
-//                    );
-//                }
-//        );
-        traitList.forEach(
-            trait -> sexList.forEach(sex -> {
-                futures.add(CompletableFuture.runAsync(() -> AbstractMethodFactory.getMethod(MethodType.ISOTWAS, trait, sex).execute()));
-            })
+        methodList.forEach(
+                m -> {
+                    if (m == MethodType.PASCAL) {
+                        return;
+                    }
+                    traitList.forEach(
+                        trait -> sexList.forEach(sex -> {
+                            futures.add(CompletableFuture.runAsync(() -> AbstractMethodFactory.getMethod(m, trait, sex).execute()));
+                        })
+                    );
+                }
         );
+
+//        traitList.forEach(
+//            trait -> sexList.forEach(sex -> {
+//                futures.add(CompletableFuture.runAsync(() -> AbstractMethodFactory.getMethod(MethodType.MAGMA, trait, sex).execute()));
+//            })
+//        );
 
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
         log.info("执行完毕！");
     }
 
-    public void start() {
-//        extract();
-        run();
+    // 收集结果
+    private void collect() {
+        log.info("整合结果...");
+        ResultUtil util = new ResultUtil();
+        for (MethodType type : methodList) {
+            switch (type) {
+                case PASCAL:
+                    util.pascal(type);
+                    break;
+                case MAGMA:
+                    util.magma(type);
+                    break;
+                case SPREDIXCAN:
+                    util.spred(type);
+                    break;
+                case TFTWAS:
+                    util.tf(type);
+                    break;
+                case SMR:
+                    util.smr(type);
+                    break;
+                case FUSION:
+                    util.fusion(type);
+                    break;
+                case UTMOST:
+                    util.utmost(type);
+                    break;
+                case ISOTWAS:
+                    util.iso(type);
+                    break;
+                case LDSC:
+                    util.ldsc(type);
+                    break;
+            }
+        }
+        util.write();
+        log.info("整合完毕！");
     }
+
+    public void start() {
+        extract();
+//        run();
+//        collect();
+    }
+
+
 }

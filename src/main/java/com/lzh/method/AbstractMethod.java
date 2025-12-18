@@ -3,6 +3,7 @@ package com.lzh.method;
 import com.lzh.UKB;
 import com.lzh.util.PropsUtil;
 
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -17,6 +18,7 @@ import java.util.jar.JarFile;
 public abstract class AbstractMethod {
     private UKB.Trait trait;
     private String sex;
+    private String name; //方法名
     protected static final String BASE_DIR = UKB.OUTPUT + "/script/";
 //    // 因为待分析的基因可能位于相同染色体，这种情况只需要分析一次;不同方法实例独享set，相同方法实例共享set；线程安全
 //    private static final Map<Class<? extends AbstractMethod>, Set<Integer>> chrMap = new ConcurrentHashMap<>();
@@ -29,9 +31,10 @@ public abstract class AbstractMethod {
 
     private AbstractMethod() {}
 
-    public AbstractMethod(UKB.Trait trait, String sex) {
+    public AbstractMethod(UKB.Trait trait, String sex, String name) {
         this.trait = trait;
         this.sex = sex;
+        this.name = name;
     }
 
     public final void execute() {
@@ -48,7 +51,9 @@ public abstract class AbstractMethod {
      * 方法名
      * @return 方法名
      */
-    protected abstract String getName();
+    protected final String getName() {
+        return name;
+    }
 
     /**
      * 准备
@@ -63,6 +68,7 @@ public abstract class AbstractMethod {
      * 拷贝脚本（提供执行脚本）
      */
     private void copyScript() throws Exception {
+        // 同一种方法只拷贝一次
         synchronized (getClass()) {
             String resource = "script/" + getName();
             Path target = Paths.get(BASE_DIR + getName());
@@ -131,6 +137,14 @@ public abstract class AbstractMethod {
     }
 
     /**
+     * 结果输出目录
+     * @return
+     * 用于UTMOST,LDSC
+     */
+    protected final String output() {
+        return UKB.RESULT + "/" + trait.getName() + "/" + getName() + "/" + sex;
+    }
+    /**
      * summary输入
      * @param t 性状名
      * @param chr 染色体号
@@ -166,4 +180,21 @@ public abstract class AbstractMethod {
         }
     }
 
+    /**
+     * 用于utmost,LDSC合并summary
+     */
+    protected final void combineSummary() {
+        List<Integer> chrList = new ArrayList<>(UKB.chrSet);
+        Collections.sort(chrList);
+        String target = output() + "/summ.assoc.txt";
+        for (Integer chr : chrList) {
+            String cmd = String.format("tail -n +2 %s >> %s"
+                                        , summ(chr)
+                                        , target
+            );
+            runProcess(cmd);
+        }
+        String sed = "sed -i '1i chr rs ps n_mis n_obs allele1 allele0 af beta se p_wald' " + target;
+        runProcess(sed);
+    }
 }

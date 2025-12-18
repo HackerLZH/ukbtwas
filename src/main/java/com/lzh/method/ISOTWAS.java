@@ -11,36 +11,30 @@ public class ISOTWAS extends AbstractMethod{
     // 是否准备好运行前的资源
     private static volatile boolean prepared = false;
 
-    public ISOTWAS(UKB.Trait trait, String sex) {
-        super(trait, sex);
-    }
-
-    @Override
-    protected String getName() {
-        return "ISOTWAS";
+    public ISOTWAS(UKB.Trait trait, String sex, String name) {
+        super(trait, sex, name);
     }
 
     @Override
     protected void prepare() {
         try {
-            if (!prepared) {
-                synchronized (ISOTWAS.class) {
-                    if (!prepared) {
-                        for (Integer chr : UKB.chrSet) {
-                            Files.createDirectories(Paths.get(output(chr)));
-                        }
-                        for (UKB.Gene gene : UKB.geneList) {
-                            String cmd = String.format("%s %s %s %s %s %s"
-                                            , PropsUtil.getProp("iso.rscript")
-                                            , BASE_DIR + getName() + "/makeld.R"
-                                            , PropsUtil.getProp("1kg")
-                                            , gene.getEnsembl()
-                                            , PropsUtil.getProp("iso.resource")
-                                            , PropsUtil.getProp("plink"));
-                            runProcess(cmd);
-                        }
-                        prepared = true;
+            for (Integer chr : UKB.chrSet) {
+                Files.createDirectories(Paths.get(output(chr)));
+            }
+            // 只需要一次makeld
+            synchronized (ISOTWAS.class) {
+                if (!prepared) {
+                    for (UKB.Gene gene : UKB.geneList) {
+                        String cmd = String.format("%s %s/makekd.R %s %s %s %s"
+                                        , PropsUtil.getProp("iso.rscript")
+                                        , BASE_DIR + getName()
+                                        , PropsUtil.getProp("1kg")
+                                        , gene.getEnsembl()
+                                        , PropsUtil.getProp("iso.resource")
+                                        , PropsUtil.getProp("plink"));
+                        runProcess(cmd);
                     }
+                    prepared = true;
                 }
             }
         } catch (IOException e) {

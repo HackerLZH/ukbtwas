@@ -1,31 +1,25 @@
 #!/bin/bash
-trait="BMI"
-snploc=/gpfs/chencao/zhenghuili/data/hg37/snp_loc.txt
-geneloc=/gpfs/chencao/zhenghuili/software/magma/resource/NCBI37.3.gene.loc
-ref=/gpfs/chencao/zhenghuili/data/geno/1000_genome/eur/g1000_eur
-magma=/gpfs/chencao/zhenghuili/software/magma/magma
 
-for sex in "all" "male" "female"; do
-for chr in 7; do
+snploc="$1"
+resource="$2"
+# 1kg
+ref="$3"
+magma="$4"
+summary="$5"
+output="$6"
 
-summary=/gpfs/chencao/zhenghuili/metabo_gwas/trait/"$trait"/chr"$chr"/"$sex"/output/summ.assoc
-output=/gpfs/chencao/zhenghuili/metabo_gwas/trait/"$trait"/MAGMA/"$chr"/"$sex"
+awk '{if(NR>1) print $2"\t"$11}' ${summary}.txt > "$output"/p.txt
 
-mkdir -p "$output"
+n=$(awk '(NR==2){print $4+$5}' "$summary".txt)
 
-#awk -F'\t' '{if(NR>1) print $2"\t"$1"\t"$3}' ${summary}.txt > ${summary}_snp.txt
-awk -F'\t' '{if(NR>1) print $2"\t"$11}' ${summary}.txt >${summary}_p.txt
+${magma} --annotate --snp-loc "$snploc" --gene-loc "$resource"/NCBI37.3.gene.loc --out "$output"/anno
 
-n=$(awk -F'\t' '(NR==2){print $4+$5}' "$summary".txt)
+${magma} --bfile ${ref} --pval "$output"/p.txt  N="$n" --gene-annot "$output"/anno.genes.annot --out ${output}/result
 
-${magma} --annotate --snp-loc "$snploc" --gene-loc ${geneloc} --out ${summary}_anno
-
-${magma} --bfile ${ref} --pval ${summary}_p.txt  N="$n" --gene-annot ${summary}_anno.genes.annot --out ${output}/result
-
-rm ${summary}_snp.txt
-rm ${summary}_p.txt
-rm ${summary}_anno.genes.annot
-rm ${summary}_anno.log
-
-done
-done
+rm "$output"/snp.txt
+rm "$output"/p.txt
+rm "$output"/anno.genes.annot
+rm "$output"/anno.log
+rm "$output"/result.genes.raw
+rm "$output"/result.log
+rm "$output"/result.log.suppl

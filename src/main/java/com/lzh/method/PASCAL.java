@@ -8,13 +8,8 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 
 public class PASCAL extends AbstractMethod{
-    public PASCAL(UKB.Trait trait, String sex) {
-        super(trait, sex);
-    }
-
-    @Override
-    protected String getName() {
-        return "PASCAL";
+    public PASCAL(UKB.Trait trait, String sex, String name) {
+        super(trait, sex, name);
     }
 
     @Override
@@ -39,8 +34,14 @@ public class PASCAL extends AbstractMethod{
                 for (String s : UKB.sexList) {
                     String OUT_DIR = output(t.getName(), chr, s);
                     String SUMM = summ(t.getName(), chr, s);
-                    String cmd = String.format("%s --job-name=pascal sh %s/pascal.sh %s %s %s"
-                                                , PropsUtil.getProp(UKB.SRUN_4G), BASE_DIR + getName(), OUT_DIR, SUMM, PropsUtil.getProp("pascal"));
+                    String cmd = String.format("%s --job-name=%s sh %s/pascal.sh %s %s %s"
+                                                , PropsUtil.getProp(UKB.SRUN_4G)
+                                                , getName()
+                                                , BASE_DIR + getName()
+                                                , OUT_DIR
+                                                , SUMM
+                                                , PropsUtil.getProp("pascal.dir")
+                    );
                     runProcess(cmd);
                 }
             }
