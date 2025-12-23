@@ -15,8 +15,7 @@ sed -i '1i SNP A1 A2 Z N P' "$out"/ldsc.txt
     --sumstats "$out"/ldsc.txt \
     --N "$N" \
     --out "$out"/ldsc \
-    --merge-alleles "$snps" \
-    --chunksize 500000
+    --merge-alleles "$snps"
 
 # 遗传力
 "$py" "$dir"/ldsc.py \

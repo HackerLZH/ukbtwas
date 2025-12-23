@@ -139,10 +139,19 @@ public abstract class AbstractMethod {
     /**
      * 结果输出目录
      * @return
-     * 用于UTMOST,LDSC
+     * 用于UTMOST
      */
     protected final String output() {
         return UKB.RESULT + "/" + trait.getName() + "/" + getName() + "/" + sex;
+    }
+
+    /**
+     * 结果输出目录
+     * @return
+     * 用于LDSC
+     */
+    protected final String output(String gene) {
+        return UKB.RESULT + "/" + trait.getName() + "/" + getName() + "/" + gene + "/" + sex;
     }
     /**
      * summary输入
@@ -162,7 +171,7 @@ public abstract class AbstractMethod {
      * summary输入
      * @param chr
      * @return
-     * 用于非PASCAL，UTMOST, LDSC
+     * 用于非PASCAL，UTMOST
      */
     protected final String summ(Integer chr) {
         return summ(trait.getName(), chr, sex);

@@ -10,6 +10,8 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -246,24 +248,32 @@ public class ResultUtil {
     }
 
     public void ldsc(MethodType type) {
+        // Total Observed scale h2: -0.0736 (0.0831)
+        Pattern pattern = Pattern.compile("(-?\\d+\\.\\d+)\\s+\\((-?\\d+\\.\\d+)\\)");
         for (UKB.Trait trait : UKB.traitList) {
-            for (String sex : UKB.sexList) {
-                String result = UKB.RESULT + "/" + trait.getName() + "/" + type.name + "/" + sex + "/ldsc.log";
-                try (BufferedReader br = Files.newBufferedReader(Paths.get(result))) {
-                    String line;
-                    while ((line = br.readLine()) != null) {
-                        if (line.startsWith("Total Observed")) {
-                            String h = line.substring(line.indexOf(":") + 1).trim().split("\\s+")[0];
-                            ldscResultList.add(new LDSCResult(
-                                    type.name
-                                    , trait.getName()
-                                    , sex
-                                    , String.format(decimalFmt, Double.parseDouble(h))
-                            ));
+            for (UKB.Gene gene : UKB.geneList) {
+                for (String sex : UKB.sexList) {
+                    String result = UKB.RESULT + "/" + trait.getName() + "/" + type.name + "/" + gene.getSymbol() + "/" + sex + "/ldsc.log";
+                    try (BufferedReader br = Files.newBufferedReader(Paths.get(result))) {
+                        String line;
+                        while ((line = br.readLine()) != null) {
+                            if (line.startsWith("Total Observed")) {
+                                Matcher matcher = pattern.matcher(line);
+                                if (matcher.find()) {
+                                    ldscResultList.add(new LDSCResult(
+                                            type.name
+                                            , trait.getName()
+                                            , sex
+                                            , String.format(decimalFmt, Double.parseDouble(matcher.group(1)))
+                                            , String.format(decimalFmt, Double.parseDouble(matcher.group(2)))
+                                    ));
+                                }
+                                break;
+                            }
                         }
+                    } catch (IOException e) {
+                        e.printStackTrace();
                     }
-                } catch (IOException e) {
-                    e.printStackTrace();
                 }
             }
         }
@@ -332,12 +342,14 @@ public class ResultUtil {
         String trait;
         String sex;
         String h;
+        String p;
 
-        public LDSCResult(String method, String trait, String sex, String h) {
+        public LDSCResult(String method, String trait, String sex, String h, String p) {
             this.method = method;
             this.trait = trait;
             this.sex = sex;
             this.h = h;
+            this.p = p;
         }
     }
 
@@ -394,7 +406,7 @@ public class ResultUtil {
 
         if (!ldscResultList.isEmpty()) {
             try (BufferedWriter bw = Files.newBufferedWriter(Paths.get(UKB.RESULT + "/ldsc.txt"))) {
-                bw.write("method\ttrait\tsex\th\n");
+                bw.write("method\ttrait\tsex\th\tp\n");
                 for (LDSCResult result : ldscResultList) {
                     StringBuilder sb = new StringBuilder();
                     sb.append(result.method)
@@ -404,6 +416,8 @@ public class ResultUtil {
                             .append(result.sex)
                             .append("\t")
                             .append(result.h)
+                            .append("\t")
+                            .append(result.p)
                             .append("\n");
                     bw.write(sb.toString());
                 }
