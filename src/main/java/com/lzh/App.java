@@ -1,7 +1,6 @@
 package com.lzh;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import com.lzh.util.ConvertUtil;
 
 /**
  * Hello world!
@@ -14,7 +13,7 @@ public class App
     {
         if (args.length == 0) {
             System.out.format("Welcome to use this tool!\n" +
-                    "Usage:\n\n" +
+                    "Usage:\n" +
                     "java -jar xxx.jar\n" +
                     "--genes [input_file]\n" +
                     "--traits [trait1,trait2,...,traitn]\n" +
@@ -23,9 +22,11 @@ public class App
                     "--[method1]\n--[method2]\n...\n\n" +
                     "You can access %s for more details.\n" +
                     "Warning: your java version must be equal to or greater than jdk8!!!\n", GITHUB);
-        } else {
+        } else if (args[0].startsWith("--")){
             UKB ukb = new UKB(args);
             ukb.start();
+        } else if (args[0].equals("convert")){
+            ConvertUtil.accept(args);
         }
     }
 }

@@ -70,15 +70,15 @@ Whether to consider sex, default is not to consider.
 
 The following analysis methods are currently supported. Related resources can be downloaded from the links provided.
 
-- `--magma` [Executable, Gene locations, build 37, European reference data](https://cncr.nl/research/magma/)
-- `--pascal` [Download]()
-- `--fusion` [Download]()
-- `--iso` [Download]()
-- `--tf` [Download]()
-- `--utmost` [Download]()
-- `--spred` [Download]()
-- `--smr` [Download]()
-- `--ldsc` [Download]()
+- `--magma` [SOFTWARE | Executable, Gene locations, build 37, European reference data](https://cncr.nl/research/magma/)
+- `--pascal` [SOFTWARE](https://www2.unil.ch/cbg/index.php?title=Pascal)
+- `--fusion` [SOFTWARE](http://gusevlab.org/projects/fusion/)
+- `--iso` [SOFTWARE](https://bhattacharya-lab.com/isotwas/)
+- `--tf` [SOFTWARE | .DB weights](https://github.com/theLongLab/TF-TWAS)
+- `--utmost` [SOFTWARE](https://github.com/Joker-Jerome/UTMOST)
+- `--spred` [SOFTWARE](https://github.com/hakyimlab/MetaXcan)
+- `--smr` [SOFTWARE](https://yanglab.westlake.edu.cn/software/smr/#Overview)
+- `--ldsc` [SOFTWARE](https://github.com/bulik/LDSC)
 
 ## Other
 

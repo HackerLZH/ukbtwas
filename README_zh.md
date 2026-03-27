@@ -59,14 +59,14 @@ ${\textsf{\color{red}尚未完成此功能！！！}}$
 ## 方法
 目前支持以下方法分析，相关资源可从后面链接中下载。
 - `--magma` [可执行文件，Gene locations,build 37，Eurpean reference data](https://cncr.nl/research/magma/)
-- `--pascal` [下载]()
-- `--fusion` [下载]()
-- `--iso` [下载]()
-- `--tf` [下载]()
-- `--utmost` [下载]()
-- `--spred` [下载]()
-- `--smr` [下载]()
-- `--ldsc` [下载]()
+- `--pascal` [软件](https://www2.unil.ch/cbg/index.php?title=Pascal)
+- `--fusion` [软件](http://gusevlab.org/projects/fusion/)
+- `--iso` [软件](https://bhattacharya-lab.com/isotwas/)
+- `--tf` [软件 | .DB权重文件](https://github.com/theLongLab/TF-TWAS)
+- `--utmost` [软件](https://github.com/Joker-Jerome/UTMOST)
+- `--spred` [软件](https://github.com/hakyimlab/MetaXcan)
+- `--smr` [软件](https://yanglab.westlake.edu.cn/software/smr/#Overview)
+- `--ldsc` [软件](https://github.com/bulik/LDSC)
 
 ## 其他
 默认情况下运行所有步骤，可以通过以下选项只运行某一步或者某几步，当然前提是前面步骤都成功了
