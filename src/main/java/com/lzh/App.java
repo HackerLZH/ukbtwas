@@ -15,9 +15,10 @@ public class App
             System.out.format("Welcome to use this tool!\n" +
                     "Usage:\n" +
                     "java -jar xxx.jar\n" +
+                    "--param [input_file]\n" +
                     "--genes [input_file]\n" +
                     "--traits [trait1,trait2,...,traitn]\n" +
-                    "--plinks [trait1,trait2,...,traitn]\n" +
+                    "--trait2 [trait1.code,trait2.code,...,traitn.code]\n" +
                     "--sex\n" +
                     "--[method1]\n--[method2]\n...\n\n" +
                     "You can access %s for more details.\n" +

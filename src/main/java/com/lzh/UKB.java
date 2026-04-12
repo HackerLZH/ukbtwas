@@ -10,9 +10,9 @@ import com.lzh.util.ResultUtil;
 import org.slf4j.Logger;
 
 import java.io.*;
-import java.lang.invoke.MethodHandle;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -23,6 +23,7 @@ public class UKB {
     public static final List<Trait> traitList = new ArrayList<>();
     private final List<String> fieldList = new ArrayList<>();
     public static final List<String> sexList = new ArrayList<>();
+    public static final List<String> traitFileList = new ArrayList<>(); // 用户手动输入的性状文件
     // 基因位于哪些染色体
     public static final Set<Integer> chrSet = new HashSet<>();
     // 待执行方法
@@ -62,13 +63,16 @@ public class UKB {
     public static final String SRUN_8G = "SRUN8G";
     public static final String SRUN_32G = "SRUN32G";
 
+    private boolean allTrait = false;
+
     private UKB(){}
 
     public UKB(String[] args) {
         try {
             boolean geneOk = false;
             boolean traitOk = false;
-            boolean plinkOk = false;
+            boolean paramOk = false;
+            boolean trait2Ok = false;
             step1 = step2 = step3 = false;
             sex = false;
             sexList.add("all");
@@ -78,6 +82,12 @@ public class UKB {
             // 处理传入参数
             for (int i = 0; i < args.length;) {
                 switch (args[i]) {
+                    case "--param":
+                        assert i < args.length - 1;
+                        PropsUtil.setProp(args[i + 1]);
+                        i += 2;
+                        paramOk = true;
+                        break;
                     case "--genes":
                         assert i < args.length - 1;
                         // 读取基因信息
@@ -90,10 +100,10 @@ public class UKB {
                         traitOk = readTraits(args[i + 1]);
                         i += 2;
                         break;
-                    case "--plinks":
+                    case "--traits2":
                         assert i < args.length - 1;
-                        // 读取bed/bim/fam
-                        plinkOk = readPlinks(args[i + 1]);
+                        traitFileList.addAll(Arrays.asList(args[i + 1].split(",")));
+                        trait2Ok = true;
                         i += 2;
                         break;
                     case "--sex":
@@ -160,10 +170,15 @@ public class UKB {
                 log.warn("check your --genes");
                 System.exit(0);
             }
-            // --trait和--plink至少得有一个
-            if (!traitOk && !plinkOk) {
+            // --traits和--traits2至少得有一个
+            if (!traitOk && !trait2Ok) {
                 log.warn("check your --trait or --plink");
                 System.exit(0);
+            }
+
+            if (!paramOk) {
+                // 使用默认参数
+                PropsUtil.setProp("env.properties");
             }
 
         } catch (AssertionError e) {
@@ -180,12 +195,6 @@ public class UKB {
         } catch (IOException e) {
             log.error(getStackTrace(e));
         }
-    }
-
-    private boolean readPlinks(String arg) {
-        // TODO readPlink
-
-        return true;
     }
 
     private boolean readTraits(String arg) {
@@ -469,13 +478,26 @@ public class UKB {
      * @param dataIdIndexes 待提取特征索引
      * @param thresh 连续性性状阈值
      */
-    private void extractQuants(Set<String> idSets, String[] values, List<Integer> dataIdIndexes, double thresh) {
-
+    private void extractQuants(Set<String> idSets, Map<String, Double> amap, String[] values, List<Integer> dataIdIndexes, String thresh) {
+        if (thresh == null) {
+            dataIdIndexes.forEach(i -> {
+                // 这种情况，dataIdIndexes应该只有一个id
+                try {
+                    if (!values[i].isEmpty()) {
+                        amap.put(values[0], Double.parseDouble(values[i]));
+                    }
+                } catch (NumberFormatException ne) {}
+            });
+            return;
+        }
+        double th = Double.parseDouble(thresh);
         dataIdIndexes.forEach(i -> {
             // 暂时设置大于阈值时为case
-            if (!values[i].isEmpty() && Double.parseDouble(values[i]) > thresh) {
-                idSets.add(values[0]);
-            }
+            try {
+                if (!values[i].isEmpty() && Double.parseDouble(values[i]) > th) {
+                    idSets.add(values[0]);
+                }
+            } catch (NumberFormatException ne) {}
         });
 
     }
@@ -531,6 +553,8 @@ public class UKB {
     private void extract() {
         // trait对应case set
         Map<String, Set<String>> caseMap = new HashMap<>();
+        // 纯粹的连续型trait，不划分case control
+        Map<String, Map<String, Double>> quantMap = new HashMap<>();
         // 有dataId的trait集合
         List<Trait> traitHasDataId = new ArrayList<>();
         // 有ICD10的trait集合
@@ -539,6 +563,7 @@ public class UKB {
         List<Trait> traitHasSelfReport = new ArrayList<>();
         traitList.forEach(trait -> {
             caseMap.put(trait.getName(), new HashSet<>());
+            quantMap.put(trait.getName(), new HashMap<>());
             if (trait.getDataIdIndexes() != null) {
                 traitHasDataId.add(trait);
             }
@@ -549,62 +574,69 @@ public class UKB {
                 traitHasSelfReport.add(trait);
             }
         });
+
         // a.获取来源于dataId的trait case
-        log.info("提取dataId来源......");
-        try(BufferedReader br = Files.newBufferedReader(Paths.get(PARTICIPANT))) {
-            // 跳过标题
-            br.readLine();
-            br.lines().forEach(line -> {
-                // 所有表型值
-                String[] values =  line.trim().split(",");
-                traitHasDataId.forEach(trait -> {
-                    if (trait.getType().equals("Q")) {
-                        extractQuants(caseMap.get(trait.getName()), values, trait.getDataIdIndexes(), Double.parseDouble(trait.getThreshold()));
-                    } else {
-                        extractBinaries(caseMap.get(trait.getName()), values, trait.getDataIdIndexes());
-                    }
+        if (!traitHasDataId.isEmpty()) {
+            log.info("提取dataId来源......");
+            try(BufferedReader br = Files.newBufferedReader(Paths.get(PARTICIPANT))) {
+                // 跳过标题
+                br.readLine();
+                br.lines().forEach(line -> {
+                    // 所有表型值
+                    String[] values =  line.trim().split(",", -1);
+                    traitHasDataId.forEach(trait -> {
+                        if (trait.getType().equals("Q")) {
+                            extractQuants(caseMap.get(trait.getName()), quantMap.get(trait.getName()), values, trait.getDataIdIndexes(), trait.getThreshold());
+                        } else {
+                            extractBinaries(caseMap.get(trait.getName()), values, trait.getDataIdIndexes());
+                        }
+                    });
                 });
-            });
-        } catch (Exception e) {
-            log.error("提取失败:\n" + getStackTrace(e));
-            System.exit(0);
+            } catch (Exception e) {
+                log.error("提取失败:\n" + getStackTrace(e));
+                System.exit(0);
+            }
+            log.info("提取成功！");
         }
-        log.info("提取成功！");
+
         // b.获取来源于ICD10的trait case
-        log.info("提取ICD10来源......");
-        try(BufferedReader br = Files.newBufferedReader(Paths.get(ICD10))) {
-            br.readLine();
-            br.lines().forEach(line -> {
-                String[] values = line.trim().split(",");
-                if (values.length > 1) {
-                    traitHasICD10.forEach(trait -> extractICD10(caseMap.get(trait.getName()), values, trait.getICD10()));
-                }
-            });
-        } catch (Exception e) {
-            log.error("提取失败:\n" + getStackTrace(e));
-            System.exit(0);
-        }
-        log.info("提取成功！");
-        log.info("提取self-report来源......");
-        for (int i = 0; i <= 33; ++i) {
-            try (BufferedReader br = Files.newBufferedReader(Paths.get(String.format("%s/selfreport_%d.csv", SELFREPORT, i)))) {
+        if (!traitHasICD10.isEmpty()) {
+            log.info("提取ICD10来源......");
+            try(BufferedReader br = Files.newBufferedReader(Paths.get(ICD10))) {
                 br.readLine();
                 br.lines().forEach(line -> {
                     String[] values = line.trim().split(",");
                     if (values.length > 1) {
-                        traitHasSelfReport.forEach(trait -> extractSelfReport(caseMap.get(trait.getName()), values, trait.getSelfReport()));
+                        traitHasICD10.forEach(trait -> extractICD10(caseMap.get(trait.getName()), values, trait.getICD10()));
                     }
                 });
             } catch (Exception e) {
                 log.error("提取失败:\n" + getStackTrace(e));
                 System.exit(0);
             }
+            log.info("提取成功！");
         }
-        log.info("提取成功！");
 
-//        caseMap.forEach((k, v) -> {
-//            log.info(k + ":" + v.size());
-//        });
+        // c.获取来源于self-report的trait case
+        if (!traitHasSelfReport.isEmpty()) {
+            log.info("提取self-report来源......");
+            for (int i = 0; i <= 33; ++i) {
+                try (BufferedReader br = Files.newBufferedReader(Paths.get(String.format("%s/selfreport_%d.csv", SELFREPORT, i)))) {
+                    br.readLine();
+                    br.lines().forEach(line -> {
+                        String[] values = line.trim().split(",");
+                        if (values.length > 1) {
+                            traitHasSelfReport.forEach(trait -> extractSelfReport(caseMap.get(trait.getName()), values, trait.getSelfReport()));
+                        }
+                    });
+                } catch (Exception e) {
+                    log.error("提取失败:\n" + getStackTrace(e));
+                    System.exit(0);
+                }
+            }
+            log.info("提取成功！");
+        }
+
 
         // 创建summary目录
         try {
@@ -614,17 +646,21 @@ public class UKB {
             System.exit(0);
         }
 
+        // 删除无效性状
+        caseMap.entrySet().removeIf(e -> e.getValue().isEmpty());
+        quantMap.entrySet().removeIf(e -> e.getValue().isEmpty());
 
-        // 和eur id求交集输出trait code，其中case=1,control=0
         Map<String, BufferedWriter> bwMap = new HashMap<>();
-        caseMap.forEach((name, set) -> {
+        traitList.forEach((trait -> {
             try {
-                bwMap.put(name, Files.newBufferedWriter(Paths.get(SUMMARY + "/" + name + ".code")));
+                bwMap.put(trait.getName(), Files.newBufferedWriter(Paths.get(SUMMARY + "/" + trait.getName() + ".code")));
             } catch (IOException e) {
                 log.error(getStackTrace(e));
                 System.exit(0);
             }
-        });
+        }));
+
+        // 和eur id求交集输出trait code，其中case=1,control=0，或者连续值
         try (BufferedReader br = Files.newBufferedReader(Paths.get(EUR))) {
             br.lines().forEach(id -> {
                 caseMap.forEach((name, set) -> {
@@ -633,6 +669,18 @@ public class UKB {
                             bwMap.get(name).write("1\n");
                         } else {
                             bwMap.get(name).write("0\n");
+                        }
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+
+                quantMap.forEach((name, map) -> {
+                    try {
+                        if (map.containsKey(id)) {
+                            bwMap.get(name).write(map.get(id) + "\n");
+                        } else {
+                            bwMap.get(name).write("-9\n");
                         }
                     } catch (IOException e) {
                         throw new RuntimeException(e);
@@ -653,6 +701,22 @@ public class UKB {
             });
         }
         caseMap.clear();
+        quantMap.clear();
+
+        // 处理手动输入的性状
+        for (String p : traitFileList) {
+            String name = FileNameUtil.mainName(p);
+            Trait t = new Trait();
+            t.setName(name);
+            traitList.add(t);
+            try {
+                Files.copy(Paths.get(p), Paths.get(SUMMARY + "/" + name + ".code"), StandardCopyOption.REPLACE_EXISTING);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+
+        allTrait = true;
 
         // bed/bim/fam
         List<CompletableFuture<Void>> futures = new ArrayList<>();
@@ -669,7 +733,6 @@ public class UKB {
             });
         });
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-        // TODO maybe plinks begin here
 
         // 考虑性别
         if (sex) {
@@ -788,6 +851,14 @@ public class UKB {
     }
 
     private void run() {
+        if (!allTrait) {
+            for (String p : traitFileList) {
+                String name = FileNameUtil.mainName(p);
+                Trait t = new Trait();
+                t.setName(name);
+                traitList.add(t);
+            }
+        }
         log.info("summary准备完毕，开始执行TWAS......");
         try {
             Files.createDirectories(Paths.get(RESULT));

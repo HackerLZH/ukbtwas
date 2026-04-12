@@ -9,13 +9,17 @@ public final class PropsUtil {
     private static Props props;
 
     public static String getProp(String name) {
-        if (props == null) {
-            synchronized (PropsUtil.class) {
-                if (props == null) {
-                    props = new Props("env.properties");
-                }
-            }
-        }
+//        if (props == null) {
+//            synchronized (PropsUtil.class) {
+//                if (props == null) {
+//                    props = new Props("env.properties");
+//                }
+//            }
+//        }
         return props.getStr(name);
+    }
+
+    public static void setProp(String file) {
+        props = new Props(file);
     }
 }

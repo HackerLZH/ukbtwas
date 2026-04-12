@@ -50,15 +50,15 @@ UK BioBank currently provides three sources of traits:
 It is not necessary to fill in all; **choose** based on the specific trait.
 
 The above applies to **automatic extraction** of simple traits. Another option is provided below, where users need to **manually extract** traits.
-${\textsf{\color{red}This feature is not yet implemented!!!}}$
+
 
 ```
---plinks [trait1,trait2,...,traitn]
+--traits2 [trait1.code,trait2.code,...,traitn.code]
 ```
 
-You can directly input the bed/bim/fam (without extension) of already extracted traits.
+The trait document contains only one column, all European trait values.
 
-Both methods can be used together.
+Both methods can be used together, but not both.
 
 ## Sex
 

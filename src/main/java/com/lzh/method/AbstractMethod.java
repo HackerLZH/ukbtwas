@@ -1,12 +1,11 @@
 package com.lzh.method;
 
 import com.lzh.UKB;
+import com.lzh.util.LogUtil;
 import com.lzh.util.PropsUtil;
+import org.slf4j.Logger;
 
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.net.JarURLConnection;
 import java.net.URL;
 import java.nio.file.*;
@@ -20,6 +19,7 @@ public abstract class AbstractMethod {
     private String sex;
     private String name; //方法名
     protected static final String BASE_DIR = UKB.OUTPUT + "/script/";
+    private final static Logger log = LogUtil.getLogger(AbstractMethod.class);
 //    // 因为待分析的基因可能位于相同染色体，这种情况只需要分析一次;不同方法实例独享set，相同方法实例共享set；线程安全
 //    private static final Map<Class<? extends AbstractMethod>, Set<Integer>> chrMap = new ConcurrentHashMap<>();
 //    private Set<Integer> getSharedSet() {
@@ -107,6 +107,27 @@ public abstract class AbstractMethod {
 
             try (InputStream in = jarFile.getInputStream(entry)) {
                 Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+            if (target.toString().trim().endsWith(".sh")) {
+                try {
+                    Path tempFile = target.resolveSibling(target.getFileName() + ".tmp");
+
+                    try (BufferedReader reader = Files.newBufferedReader(target);
+                         BufferedWriter writer = Files.newBufferedWriter(tempFile)) {
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            writer.write(line);
+                            writer.newLine();
+                        }
+                    }
+
+                    Files.move(tempFile, target, StandardCopyOption.REPLACE_EXISTING);
+                    log.info("成功转换换行符: " + target);
+
+                } catch (IOException e) {
+                    log.error("转换失败: " + e.getMessage());
+                    e.printStackTrace();
+                }
             }
         }
     }

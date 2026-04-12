@@ -35,21 +35,20 @@ self-report:high cholesterol
 type：性状类型，连续性（Q）还是二分类（B）
 
 UK BioBank 目前提供三种性状来源：
-1. **dataId**：threshold与dataId匹配，threshold用于分割性状的case和control。
+1. **dataId**：threshold与dataId匹配，threshold用于分割性状的case和control，没有threshold那就是分析连续型性状。
 2. **ICD10**
 3. **self-report**
 
 无需全部填写，根据具体性状进行**选填**
 
 以上适用于简单性状**自动提取**，下面提供另外一种选项，用户需要**手动提取**性状
-${\textsf{\color{red}尚未完成此功能！！！}}$
 
 ```
---plinks [trait1,trait2,...,traitn]
+--traits2 [trait1.code,trait2.code,...,traitn.code]
 ```
-可以直接输入已提取性状的bed/bim/fam（不带扩展名）
+性状文件仅包含一列，全部欧洲人的性状值。
 
-两种方法可以一起用
+两种方法可以一起用，但不能都不用。
 
 ## 性别
 `--sex`
