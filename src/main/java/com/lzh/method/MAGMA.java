@@ -56,6 +56,9 @@ public class MAGMA extends AbstractMethod{
                                         , summ(chr).substring(0, summ(chr).lastIndexOf("."))
                                         , output(chr)
                     );
+            if (UKB.verbose) {
+                getLogger().info(cmd);
+            }
             runProcess(cmd);
         }
     }

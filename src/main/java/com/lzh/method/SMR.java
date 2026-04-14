@@ -37,6 +37,9 @@ public class SMR extends AbstractMethod{
                     , PropsUtil.getProp("smr.bfile")
                     , PropsUtil.getProp("smr.eqtl")
             );
+            if (UKB.verbose) {
+                getLogger().info(cmd);
+            }
             runProcess(cmd);
         }
     }

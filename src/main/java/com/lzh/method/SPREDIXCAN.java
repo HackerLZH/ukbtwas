@@ -37,6 +37,9 @@ public class SPREDIXCAN extends AbstractMethod{
                                             , PropsUtil.getProp("spred.model")
                                             , PropsUtil.getProp("spred.py")
             );
+            if (UKB.verbose) {
+                getLogger().info(cmd);
+            }
             runProcess(cmd);
         }
     }

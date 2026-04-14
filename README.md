@@ -95,3 +95,7 @@ Run only the analysis.
 ```--step3```
 
 Collect only the results.
+
+```--verbose```
+
+Detailed output

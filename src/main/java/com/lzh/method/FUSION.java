@@ -37,6 +37,9 @@ public class FUSION extends AbstractMethod{
                     , PropsUtil.getProp("fusion.dir")
                     , PropsUtil.getProp("fusion.rscript")
             );
+            if (UKB.verbose) {
+                getLogger().info(cmd);
+            }
             runProcess(cmd);
         }
     }

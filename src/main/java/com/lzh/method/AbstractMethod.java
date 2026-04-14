@@ -37,6 +37,10 @@ public abstract class AbstractMethod {
         this.name = name;
     }
 
+    protected Logger getLogger() {
+        return LogUtil.getLogger(this.getClass());
+    }
+    
     public final void execute() {
         try {
             copyScript();

@@ -35,6 +35,9 @@ public class UTMOST extends AbstractMethod{
                 , PropsUtil.getProp("utmost.dir")
                 , output()
         );
+        if (UKB.verbose) {
+            getLogger().info(cmd);
+        }
         runProcess(cmd);
     }
 }

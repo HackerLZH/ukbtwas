@@ -59,6 +59,9 @@ public class LDSC extends AbstractMethod{
                     , PropsUtil.getProp("ldsc.snps")
                     , PropsUtil.getProp("ldsc.ref")
             );
+            if (UKB.verbose) {
+                getLogger().info(cmd);
+            }
             runProcess(cmd);
         }
     }

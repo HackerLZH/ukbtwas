@@ -33,6 +33,7 @@ public class UKB {
     private boolean step1; // 预处理
     private boolean step2; // 分析
     private boolean step3; // 收集结果
+    public static boolean verbose = false; // 详细输出
 
     // 是否考虑性别
     private boolean sex;
@@ -111,6 +112,10 @@ public class UKB {
                         sex = true;
                         sexList.add("male");
                         sexList.add("female");
+                        break;
+                    case "--verbose":
+                        i++;
+                        verbose = true;
                         break;
                     case "--magma":
                         methodList.add(MethodType.MAGMA);

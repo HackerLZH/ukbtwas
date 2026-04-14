@@ -37,6 +37,9 @@ public class TFTWAS extends AbstractMethod{
                     , PropsUtil.getProp("tf.model")
                     , PropsUtil.getProp("spred.py")
             );
+            if (UKB.verbose) {
+                getLogger().info(cmd);
+            }
             runProcess(cmd);
         }
     }

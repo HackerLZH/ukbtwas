@@ -53,6 +53,9 @@ public class ISOTWAS extends AbstractMethod{
                     , PropsUtil.getProp("iso.resource")
                     , gene.getEnsembl()
             );
+            if (UKB.verbose) {
+                getLogger().info(cmd);
+            }
             runProcess(cmd);
         }
     }

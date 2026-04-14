@@ -42,6 +42,9 @@ public class PASCAL extends AbstractMethod{
                                                 , SUMM
                                                 , PropsUtil.getProp("pascal.dir")
                     );
+                    if (UKB.verbose) {
+                        getLogger().info(cmd);
+                    }
                     runProcess(cmd);
                 }
             }
